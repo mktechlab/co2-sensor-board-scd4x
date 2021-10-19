@@ -2,7 +2,7 @@
 
 ## 概要
   <div align="center">
-  <img src="https://github.com/mktechlab/scd4x-board-pre/blob/main/images/scd4x-board.jpg" width="360">
+  <img src="https://github.com/mktechlab/co2-sensor-board-scd4x/blob/main/images/scd4x-board.jpg" width="360">
   </div>
 
   * M5Stack製 [M5StickC Proto Hat][1] にぴったり収まる、Sensirion製の小型な [CO<sub>2</sub>センサSCD40][2](温度・湿度センサも内蔵) を搭載した小型のブレイクアウトボードです
