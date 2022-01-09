@@ -66,7 +66,17 @@ const int CPU_FREQ_MHZ = 80;
 const int CPU_FREQ_MHZ = 10;
 #endif /* defined(UPLOAD_DATA_EN) */
 bool setupCalibMode = false;
-uint16_t ascEn = 1;
+bool setupAscMode = false;
+enum ASC_STS {
+     ASC_STS_DISABLE
+    ,ASC_STS_ENABLE
+    ,ASC_STS_MAX
+};
+uint16_t ascSts = ASC_STS_ENABLE;
+char ASC_STS_STR[ASC_STS_MAX][8] = {
+     ""
+    ,"ASC"
+};
 const int SCD4X_FRC_CO2_PPM = 400;
 
 enum D_TYPE {
@@ -185,6 +195,9 @@ void initM5() {
     if (M5.BtnA.isPressed()) {
         setupCalibMode = true;
     }
+    if (M5.BtnB.isPressed()) {
+        setupAscMode = true;
+    }
 }
 
 #if defined(UPLOAD_DATA_EN)
@@ -213,8 +226,8 @@ void setupSCD4x() {
 
     current_sts = D_STS_MEASURING;
 
-    Wire.begin(I2C_SDA_PIN,I2C_SCL_PIN);
-    scd4x.begin(Wire);
+    Wire1.begin(I2C_SDA_PIN,I2C_SCL_PIN);
+    scd4x.begin(Wire1);
 
     // stop potentially previously started measurement
     error = scd4x.stopPeriodicMeasurement();
@@ -225,12 +238,34 @@ void setupSCD4x() {
         current_sts = D_STS_READ_DATA_ERR;
     }
 
-    error = scd4x.getAutomaticSelfCalibration(ascEn);
+    error = scd4x.getAutomaticSelfCalibration(ascSts);
     if (error) {
         Serial.print("Error trying to execute getAutomaticSelfCalibration(): ");
         errorToString(error, errorMessage, 256);
         Serial.println(errorMessage);
         current_sts = D_STS_READ_DATA_ERR;
+    }
+
+    if (setupAscMode) {
+        if (ascSts == ASC_STS_ENABLE) {
+            ascSts = ASC_STS_DISABLE;
+        } else {
+            ascSts = ASC_STS_ENABLE;
+        }
+        error = scd4x.setAutomaticSelfCalibration(ascSts);
+        if (error) {
+            Serial.print("Error trying to execute setAutomaticSelfCalibration(): ");
+            errorToString(error, errorMessage, 256);
+            Serial.println(errorMessage);
+            current_sts = D_STS_READ_DATA_ERR;
+        }
+        error = scd4x.persistSettings();
+        if (error) {
+            Serial.print("Error trying to execute persistSettings(): ");
+            errorToString(error, errorMessage, 256);
+            Serial.println(errorMessage);
+            current_sts = D_STS_READ_DATA_ERR;
+        }
     }
 
     if (setupCalibMode) {
@@ -306,6 +341,8 @@ void updateData() {
         sprintf(drawValStr[i],"-");
     }
     
+    Wire1.begin(I2C_SDA_PIN,I2C_SCL_PIN);
+    scd4x.begin(Wire1);
     error = scd4x.readMeasurement(co2, temp, humi);
     if (error) {
         Serial.print("Error trying to execute readMeasurement(): ");
@@ -327,6 +364,7 @@ void updateData() {
     drawStatus(current_sts);
 
     // Read battery voltage
+    Wire1.begin(21,22);
     float battVol = M5.Axp.GetBatVoltage();
     float battVolPer = convBattVoltageToPercent(battVol);
     char valBattVolStr[10];
@@ -334,7 +372,7 @@ void updateData() {
     char drawValBattStr[16];
     dtostrf(battVol,1,2,valBattVolStr);
     dtostrf(battVolPer,3,0,valBattVolPerStr);
-    sprintf(drawValBattStr,"%s%%(%sV)",valBattVolPerStr,valBattVolStr);
+    sprintf(drawValBattStr,"%s%%(%s)",valBattVolPerStr,valBattVolStr);
     // serial print val
     for (i = 0;i < D_TYPE_MAX; i++) {
         Serial.print(D_TYPE_LABEL_STR[i]);
@@ -388,8 +426,11 @@ void updateData() {
     }
     M5.Lcd.setTextSize(2);
     M5.Lcd.setTextColor(WHITE);
-    M5.Lcd.setCursor(2, 216);
+    M5.Lcd.setCursor(2, 208);
     M5.Lcd.print(drawValBattStr);
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setCursor(117, 230);
+    M5.Lcd.print(ASC_STS_STR[ascSts]);
 #else
     M5.Lcd.fillRect(0, 10, 80, 150, BLACK);
     for (i = 0; i < D_TYPE_MAX; i++) {
@@ -407,8 +448,10 @@ void updateData() {
     }
     M5.Lcd.setTextSize(1);
     M5.Lcd.setTextColor(WHITE);
-    M5.Lcd.setCursor(12, 150);
+    M5.Lcd.setCursor(0, 150);
     M5.Lcd.print(drawValBattStr);
+    M5.Lcd.setCursor(62, 150);
+    M5.Lcd.print(ASC_STS_STR[ascSts]);
 #endif /* defined(M5STICKC_PULS_EN) */
 
 #if defined(ALERT_LED_BUZZER_EN)

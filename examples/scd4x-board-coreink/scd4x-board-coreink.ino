@@ -54,17 +54,24 @@ const int SHUTDOWN_WIFI_ERR_INTERVAL_S  = 60;   // reboot time for wifi error
 const int I2C_SCL_PIN = 26;
 const int I2C_SDA_PIN = 25;
 
-#if defined(UPLOAD_DATA_EN)
-const int CPU_FREQ_MHZ = 80;
-#else
-const int CPU_FREQ_MHZ = 10;
-#endif
+const int CPU_WIFI_FREQ_MHZ = 80;
+const int CPU_BOOT_FREQ_MHZ = 10;
 
 // for eInk
 Ink_Sprite MainPageSprite(&M5.M5Ink);
 
 bool setupCalibMode = false;
-uint16_t ascEn = 1;
+bool setupAscMode = false;
+enum ASC_STS {
+     ASC_STS_DISABLE
+    ,ASC_STS_ENABLE
+    ,ASC_STS_MAX
+};
+uint16_t ascSts = ASC_STS_ENABLE;
+char ASC_STS_STR[ASC_STS_MAX][8] = {
+     ""
+    ,"ASC"
+};
 const int SCD4X_FRC_CO2_PPM = 400;
 
 enum D_TYPE {
@@ -149,7 +156,7 @@ void initM5() {
     
     M5.begin();
     digitalWrite(LED_EXT_PIN,LOW);
-    setCpuFrequencyMhz(CPU_FREQ_MHZ);
+    setCpuFrequencyMhz(CPU_BOOT_FREQ_MHZ);
     
     Serial.begin(115200);
     while (!Serial) {
@@ -159,6 +166,9 @@ void initM5() {
     M5.update();
     if (M5.BtnMID.isPressed()) {
         setupCalibMode = true;
+    }
+    if (M5.BtnUP.isPressed()) {
+        setupAscMode = true;
     }
     
     if (!M5.M5Ink.isInit()) {
@@ -181,6 +191,7 @@ void initM5() {
 void setupNetwork() {
     int wifi_wait_time = 0;
   
+    setCpuFrequencyMhz(CPU_WIFI_FREQ_MHZ);
     WiFi.begin(WIFI_SSID, WIFI_PASS);
     while (WiFi.status() != WL_CONNECTED) {
         wifi_wait_time += WIFI_CON_WAIT_INT;
@@ -201,8 +212,8 @@ void setupSCD4x() {
     char errorMessage[256];
     uint16_t frcCorrection;
 
-    Wire.begin(I2C_SDA_PIN,I2C_SCL_PIN);
-    scd4x.begin(Wire);
+    Wire1.begin(I2C_SDA_PIN,I2C_SCL_PIN);
+    scd4x.begin(Wire1);
 
     // stop potentially previously started measurement
     error = scd4x.stopPeriodicMeasurement();
@@ -213,12 +224,34 @@ void setupSCD4x() {
         current_sts = D_STS_READ_DATA_ERR;
     }
 
-    error = scd4x.getAutomaticSelfCalibration(ascEn);
+    error = scd4x.getAutomaticSelfCalibration(ascSts);
     if (error) {
         Serial.print("Error trying to execute getAutomaticSelfCalibration(): ");
         errorToString(error, errorMessage, 256);
         Serial.println(errorMessage);
         current_sts = D_STS_READ_DATA_ERR;
+    }
+
+    if (setupAscMode) {
+        if (ascSts == ASC_STS_ENABLE) {
+            ascSts = ASC_STS_DISABLE;
+        } else {
+            ascSts = ASC_STS_ENABLE;
+        }
+        error = scd4x.setAutomaticSelfCalibration(ascSts);
+        if (error) {
+            Serial.print("Error trying to execute setAutomaticSelfCalibration(): ");
+            errorToString(error, errorMessage, 256);
+            Serial.println(errorMessage);
+            current_sts = D_STS_READ_DATA_ERR;
+        }
+        error = scd4x.persistSettings();
+        if (error) {
+            Serial.print("Error trying to execute persistSettings(): ");
+            errorToString(error, errorMessage, 256);
+            Serial.println(errorMessage);
+            current_sts = D_STS_READ_DATA_ERR;
+        }
     }
 
     if (setupCalibMode) {
@@ -235,7 +268,7 @@ void setupSCD4x() {
             current_sts = D_STS_READ_DATA_ERR;
         }
         Serial.print("Waiting for FRC... (");
-        Serial.print(SCD4X_READ_MIN_INTERVAL_S);
+        Serial.print(SCD4X_FRC_INTERVAL_S);
         Serial.println(" sec)");
         delay(SCD4X_FRC_INTERVAL_S * 1000);
         
@@ -362,6 +395,7 @@ void updateData() {
         MainPageSprite.drawString(158,48*i+58,D_TYPE_UNIT_STR[i]);
     }
     MainPageSprite.drawString(10,180,drawValBattStr);
+    MainPageSprite.drawString(158,180,ASC_STS_STR[ascSts]);
     MainPageSprite.pushSprite();
     
 #if defined(ALERT_BUZZER_EN)
