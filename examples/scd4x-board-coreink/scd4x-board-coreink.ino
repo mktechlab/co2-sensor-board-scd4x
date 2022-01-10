@@ -53,6 +53,8 @@ const int SCD4X_FRC_INTERVAL_S          = 300;  // wait for FRC
 const int SHUTDOWN_WIFI_ERR_INTERVAL_S  = 60;   // reboot time for wifi error
 const int I2C_SCL_PIN = 26;
 const int I2C_SDA_PIN = 25;
+const int I2C_RTC_SCL_PIN = 22;
+const int I2C_RTC_SDA_PIN = 21;
 
 const int CPU_WIFI_FREQ_MHZ = 80;
 const int CPU_BOOT_FREQ_MHZ = 10;
@@ -300,6 +302,7 @@ void setupSCD4x() {
         Serial.println(errorMessage);
         current_sts = D_STS_READ_DATA_ERR;
     }
+    Wire1.begin(I2C_RTC_SDA_PIN,I2C_RTC_SCL_PIN);
 
     Serial.print("Waiting for first measurement... (");
     Serial.print(SCD4X_READ_MIN_INTERVAL_S);
@@ -324,7 +327,10 @@ void updateData() {
         sprintf(drawValStr[i],"-");
     }
     
+    Wire1.begin(I2C_SDA_PIN,I2C_SCL_PIN);
+    scd4x.begin(Wire1);
     error = scd4x.readMeasurement(co2, temp, humi);
+    Wire1.begin(I2C_RTC_SDA_PIN,I2C_RTC_SCL_PIN);
     if (error) {
         Serial.print("Error trying to execute readMeasurement(): ");
         errorToString(error, errorMessage, 256);
