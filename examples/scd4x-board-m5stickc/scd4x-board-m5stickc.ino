@@ -11,7 +11,7 @@ unsigned int AMB_CH_ID  = 0; // Channel ID for Ambient
 const char* AMB_WR_KEY  = "****************"; // Write Key to Channel
 #endif /* defined(UPLOAD_DATA_EN) */
 
-const int UPDATE_INTERVAL_S   = 60;  // Update interval seconds (default:60, range:30-3600)
+const int UPDATE_INTERVAL_S   = 10;  // Update interval seconds (default:10, range:5-3600)
 const int LCD_BRIGHTNESS_LV   = 10;   // LCD brightness (default: 10, range:7-12)
 
 const uint16_t ALERT_LV1_CO2_MIN = 0;
@@ -44,6 +44,7 @@ const int ALERT_BUZZER_REPEAT_NUM = 3;  // (default: 3, range:1-10)
 
 #include <SensirionI2CScd4x.h>
 SensirionI2CScd4x scd4x;
+TwoWire Wire2 = TwoWire(2);
 
 #if defined(UPLOAD_DATA_EN)
 // for Ambient
@@ -54,7 +55,7 @@ const int WIFI_CON_WAIT_INTERVAL_MS  = 500;
 const int WIFI_CON_WAIT_TIMEOUT_MS   = 180000;
 #endif /* defined(UPLOAD_DATA_EN) */
 
-const int SCD4X_READ_MIN_INTERVAL_S  = 30; // wait for measurement
+const int SCD4X_READ_MIN_INTERVAL_S  = 5; // wait for measurement
 const int SCD4X_FRC_INTERVAL_S       = 300;  // wait for FRC
 
 const int I2C_SCL_PIN = 26;
@@ -125,7 +126,7 @@ uint16_t ALERT_LV_COLOR[ALERT_LV_MAX] {
     ,RED
 };
 
-const float BAT_VOL_MAX = 4.10;
+const float BAT_VOL_MAX = 4.00;
 const float BAT_VOL_MIN = 3.60;
 
 float convBattVoltageToPercent(float batVol) {
@@ -226,8 +227,8 @@ void setupSCD4x() {
 
     current_sts = D_STS_MEASURING;
 
-    Wire1.begin(I2C_SDA_PIN,I2C_SCL_PIN);
-    scd4x.begin(Wire1);
+    Wire2.begin(I2C_SDA_PIN,I2C_SCL_PIN);
+    scd4x.begin(Wire2);
 
     // stop potentially previously started measurement
     error = scd4x.stopPeriodicMeasurement();
@@ -309,9 +310,9 @@ void setupSCD4x() {
     }
     
     // Start Measurement
-    error = scd4x.startLowPowerPeriodicMeasurement();
+    error = scd4x.startPeriodicMeasurement();
     if (error) {
-        Serial.print("Error trying to execute startLowPowerPeriodicMeasurement(): ");
+        Serial.print("Error trying to execute startPeriodicMeasurement(): ");
         errorToString(error, errorMessage, 256);
         Serial.println(errorMessage);
         current_sts = D_STS_READ_DATA_ERR;
@@ -341,8 +342,6 @@ void updateData() {
         sprintf(drawValStr[i],"-");
     }
     
-    Wire1.begin(I2C_SDA_PIN,I2C_SCL_PIN);
-    scd4x.begin(Wire1);
     error = scd4x.readMeasurement(co2, temp, humi);
     if (error) {
         Serial.print("Error trying to execute readMeasurement(): ");
@@ -364,7 +363,6 @@ void updateData() {
     drawStatus(current_sts);
 
     // Read battery voltage
-    Wire1.begin(21,22);
     float battVol = M5.Axp.GetBatVoltage();
     float battVolPer = convBattVoltageToPercent(battVol);
     char valBattVolStr[10];

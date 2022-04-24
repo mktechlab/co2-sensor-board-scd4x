@@ -1,6 +1,6 @@
 /******************************************************************************/
-//#define UPLOAD_DATA_EN      // Enable upload data to Ambient
-//#define ALERT_BUZZER_EN // Enable buzzer alert
+//#define UPLOAD_DATA_EN    // Enable upload data to Ambient
+//#define ALERT_BUZZER_EN   // Enable buzzer alert
 
 #if defined(UPLOAD_DATA_EN)
 // WiFi Access Point
@@ -38,6 +38,7 @@ const int ALERT_BUZZER_REPEAT_NUM = 3;  // (default: 3, range:1-10)
 
 #include <SensirionI2CScd4x.h>
 SensirionI2CScd4x scd4x;
+TwoWire Wire2 = TwoWire(2);
 
 #if defined(UPLOAD_DATA_EN)
 // for Ambient
@@ -53,8 +54,6 @@ const int SCD4X_FRC_INTERVAL_S          = 300;  // wait for FRC
 const int SHUTDOWN_WIFI_ERR_INTERVAL_S  = 60;   // reboot time for wifi error
 const int I2C_SCL_PIN = 26;
 const int I2C_SDA_PIN = 25;
-const int I2C_RTC_SCL_PIN = 22;
-const int I2C_RTC_SDA_PIN = 21;
 
 const int CPU_WIFI_FREQ_MHZ = 80;
 const int CPU_BOOT_FREQ_MHZ = 10;
@@ -115,7 +114,7 @@ enum ALERT_LV {
     ,ALERT_LV_MAX
 };
 
-const float BAT_VOL_MAX = 4.10;
+const float BAT_VOL_MAX = 4.00;
 const float BAT_VOL_MIN = 3.55;
 
 int t_begin_ms = 0;
@@ -214,8 +213,8 @@ void setupSCD4x() {
     char errorMessage[256];
     uint16_t frcCorrection;
 
-    Wire1.begin(I2C_SDA_PIN,I2C_SCL_PIN);
-    scd4x.begin(Wire1);
+    Wire2.begin(I2C_SDA_PIN,I2C_SCL_PIN);
+    scd4x.begin(Wire2);
 
     // stop potentially previously started measurement
     error = scd4x.stopPeriodicMeasurement();
@@ -302,7 +301,6 @@ void setupSCD4x() {
         Serial.println(errorMessage);
         current_sts = D_STS_READ_DATA_ERR;
     }
-    Wire1.begin(I2C_RTC_SDA_PIN,I2C_RTC_SCL_PIN);
 
     Serial.print("Waiting for first measurement... (");
     Serial.print(SCD4X_READ_MIN_INTERVAL_S);
@@ -327,10 +325,7 @@ void updateData() {
         sprintf(drawValStr[i],"-");
     }
     
-    Wire1.begin(I2C_SDA_PIN,I2C_SCL_PIN);
-    scd4x.begin(Wire1);
     error = scd4x.readMeasurement(co2, temp, humi);
-    Wire1.begin(I2C_RTC_SDA_PIN,I2C_RTC_SCL_PIN);
     if (error) {
         Serial.print("Error trying to execute readMeasurement(): ");
         errorToString(error, errorMessage, 256);
@@ -354,7 +349,7 @@ void updateData() {
     float battVolPer = convBattVoltageToPercent(battVol);
     char valBattVolStr[10];
     char valBattVolPerStr[10];
-    char drawValBattStr[16];
+    char drawValBattStr[32];
     dtostrf(battVol,1,2,valBattVolStr);
     dtostrf(battVolPer,3,0,valBattVolPerStr);
     sprintf(drawValBattStr,"BATT: %s%%(%sV)",valBattVolPerStr,valBattVolStr);
